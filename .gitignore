@@ -1,0 +1,4 @@
+
+# Release scripts
+release/.env
+release/build/
