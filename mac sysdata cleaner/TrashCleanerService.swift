@@ -90,6 +90,28 @@ final class TrashCleanerService: @unchecked Sendable {
         return items.reduce(0) { $0 + $1.sizeBytes }
     }
     
+    // Last resort defense: deletes from child to parent
+    nonisolated private static func bottomUpDelete(url: URL) throws {
+        let fileManager = FileManager.default
+        var isDir: ObjCBool = false
+        
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDir) else {
+            return
+        }
+        
+        if isDir.boolValue {
+            // Delete children first
+            if let contents = try? fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: []) {
+                for childURL in contents {
+                    try? bottomUpDelete(url: childURL) // Ignore individual child errors, try to delete as much as possible
+                }
+            }
+        }
+        
+        // Then delete the item itself
+        try fileManager.removeItem(at: url)
+    }
+    
     // Force deltes a specific item bypassing limits
     nonisolated static func forceDelete(url: URL) async throws {
         // Unlock flags first
@@ -125,11 +147,16 @@ final class TrashCleanerService: @unchecked Sendable {
             
             if !exited {
                 process.terminate()
-                throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError, userInfo: [NSLocalizedDescriptionKey: "Failed to force delete item. It may be strongly locked by the system."])
             }
             
-            if process.terminationStatus != 0 {
-                throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError, userInfo: [NSLocalizedDescriptionKey: "Failed to force delete item. Insufficient permissions."])
+            if !exited || process.terminationStatus != 0 {
+                // Try last resort bottom-up deletion
+                try? bottomUpDelete(url: url)
+                
+                if fileManager.fileExists(atPath: url.path) {
+                    let errorMessage = !exited ? "Failed to force delete item. It may be strongly locked by the system." : "Failed to force delete item. Insufficient permissions."
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+                }
             }
         }
     }
