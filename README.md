@@ -24,3 +24,7 @@ Instead of permanently deleting files right away and hoping your Mac still boots
 
 ---
 *Note: Use this tool carefully. Always research files if you don't know what they are, and rely on the Trash feature to be safe.*
+
+## Alternatives
+
+If you are looking for a comprehensive command-line cleaner, check out the open-source [Mole](https://github.com/tw93/mole) project.
