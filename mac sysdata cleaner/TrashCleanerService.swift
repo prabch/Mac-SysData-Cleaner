@@ -13,30 +13,54 @@ final class TrashCleanerService: @unchecked Sendable {
     
     private init() {}
     
-    // Gets all trash dirctories including external volumes
+    // Gets all trash directories including external volumes
     nonisolated private func getTrashDirectories() -> [URL] {
         let fileManager = FileManager.default
         var trashDirs: [URL] = []
         
-        // Main user trash
-        let homeTrash = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
-        trashDirs.append(homeTrash)
+        // 1. All official trash directories reported by FileManager (covers main drive and all external volumes)
+        if let mountedVolumes = fileManager.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: []) {
+            for volume in mountedVolumes {
+                if let trash = try? fileManager.url(for: .trashDirectory, in: .allDomainsMask, appropriateFor: volume, create: false) {
+                    if !trashDirs.contains(trash) {
+                        trashDirs.append(trash)
+                    }
+                }
+            }
+        }
         
-        // External volumes trash
+        // 2. Fallbacks for standard paths to ensure nothing is missed
         let uid = getuid()
-        let volumesURL = URL(fileURLWithPath: "/Volumes")
+        let fallbackPaths = [
+            fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".Trash").path,
+            "/System/Volumes/Data/.Trashes/\\(uid)",
+            "/.Trashes/\\(uid)",
+            fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Mobile Documents/.Trash").path
+        ]
         
+        for path in fallbackPaths {
+            let url = URL(fileURLWithPath: path)
+            if !trashDirs.contains(url) {
+                trashDirs.append(url)
+            }
+        }
+        
+        // 3. Fallback for external volumes using manual path construction
+        let volumesURL = URL(fileURLWithPath: "/Volumes")
         if let volumes = try? fileManager.contentsOfDirectory(at: volumesURL, includingPropertiesForKeys: nil, options: .skipsHiddenFiles) {
             for volume in volumes {
-                let externalTrash = volume.appendingPathComponent(".Trashes").appendingPathComponent("\(uid)")
-                var isDir: ObjCBool = false
-                if fileManager.fileExists(atPath: externalTrash.path, isDirectory: &isDir) && isDir.boolValue {
+                let externalTrash = volume.appendingPathComponent(".Trashes").appendingPathComponent("\\(uid)")
+                if !trashDirs.contains(externalTrash) {
                     trashDirs.append(externalTrash)
                 }
             }
         }
         
-        return trashDirs
+        // Filter to only those that actually exist and are directories
+        return trashDirs.filter { url in
+            var isDir: ObjCBool = false
+            return fileManager.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
+        }
     }
     
     // Accurately calcultes the total size of an item
@@ -64,7 +88,7 @@ final class TrashCleanerService: @unchecked Sendable {
         return totalSize
     }
     
-    // Gets all indivdual items inside all trash dirctories
+    // Gets all individual items inside all trash directories
     func getTrashItems() async -> [FileItem] {
         return await Task.detached(priority: .userInitiated) {
             let fileManager = FileManager.default
@@ -72,7 +96,7 @@ final class TrashCleanerService: @unchecked Sendable {
             let dirs = self.getTrashDirectories()
             
             for dir in dirs {
-                if let contents = try? fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey], options: .skipsHiddenFiles) {
+                if let contents = try? fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey], options: []) {
                     for itemURL in contents {
                         let size = TrashCleanerService.calculateItemSizeAccurately(url: itemURL)
                         items.append(FileItem(name: itemURL.lastPathComponent, url: itemURL, sizeBytes: size))
