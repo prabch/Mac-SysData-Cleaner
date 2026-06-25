@@ -268,7 +268,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.4;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "prabch.mac-sysdata-cleaner";
 				PRODUCT_NAME = "Mac SysData Cleaner";
 				REGISTER_APP_GROUPS = YES;
@@ -304,7 +304,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.4;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "prabch.mac-sysdata-cleaner";
 				PRODUCT_NAME = "Mac SysData Cleaner";
 				REGISTER_APP_GROUPS = YES;
